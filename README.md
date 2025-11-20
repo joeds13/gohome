@@ -2,8 +2,6 @@
 
 A modern, clean personal homepage for your home cluster that displays Kubernetes ingresses and bookmarks with a sleek, monospaced design.
 
-curl -H 'Content-Type: application/json' -d'{ "copyright": "Joe Stringer", "url": "https://joe.stringer.sh", "email": "joe@stringer..sh", "format": "txt" }' https://rem.mit-license.org
-
 ## Features
 
 - 🔗 **Automatic Service Discovery**: Lists all Kubernetes ingresses in alphabetical order
