@@ -1,0 +1,57 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^http://localhost"
+    },
+    {
+      "pattern": "^https://localhost"
+    },
+    {
+      "pattern": "^http://127.0.0.1"
+    },
+    {
+      "pattern": "^https://127.0.0.1"
+    },
+    {
+      "pattern": "^http://.*\\.local"
+    },
+    {
+      "pattern": "^https://.*\\.local"
+    },
+    {
+      "pattern": "^http://.*\\.home\\.lab"
+    },
+    {
+      "pattern": "^https://.*\\.home\\.lab"
+    },
+    {
+      "pattern": "^http://.*\\.example\\.com"
+    },
+    {
+      "pattern": "^https://.*\\.example\\.com"
+    },
+    {
+      "pattern": "^http://.*\\.yourdomain\\.com"
+    },
+    {
+      "pattern": "^https://.*\\.yourdomain\\.com"
+    },
+    {
+      "pattern": "^mailto:"
+    }
+  ],
+  "httpHeaders": [
+    {
+      "urls": ["https://github.com", "https://api.github.com"],
+      "headers": {
+        "Accept-Encoding": "zstd, br, gzip, deflate",
+        "User-Agent": "markdown-link-check"
+      }
+    }
+  ],
+  "timeout": "20s",
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "30s",
+  "aliveStatusCodes": [200, 206, 299, 403]
+}

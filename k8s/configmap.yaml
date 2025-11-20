@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gohome-config
+  labels:
+    app: gohome
+data:
+  # Application configuration
+  title: "Go Home"
+
+  # Bookmarks configuration
+  # Format: bookmark-<name>: "url|category"
+  bookmark-hackernews: "https://news.ycombinator.com|News"
+  bookmark-bracket-city: "https://www.theatlantic.com/games/bracket-city|Games"

@@ -1,0 +1,58 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: gohome
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  - rbac.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - service.yaml
+
+commonLabels:
+  app: gohome
+  app.kubernetes.io/name: gohome
+  app.kubernetes.io/component: web
+  app.kubernetes.io/part-of: gohome
+
+images:
+  - name: ghcr.io/joeds13/gohome
+    newTag: latest
+
+configMapGenerator:
+  - name: gohome-config
+    files:
+      - config.yaml
+    options:
+      disableNameSuffixHash: true
+
+namespace: gohome
+
+replicas:
+  - name: gohome
+    count: 1
+
+patches:
+  - target:
+      kind: Ingress
+      name: gohome
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: home.example.com
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: home.example.com
+
+vars:
+  - name: NAMESPACE
+    objref:
+      kind: ConfigMap
+      name: kustomize-context
+      apiVersion: v1
+    fieldref:
+      fieldpath: metadata.namespace

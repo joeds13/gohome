@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gohome
+  labels:
+    app: gohome
+  annotations:
+    # Hide this ingress from showing up in the homepage itself
+    gohome.stringer.sh/hide: "true"
+spec:
+  tls:
+    - hosts:
+        - home.example.com
+      secretName: gohome-tls
+  rules:
+    - host: home.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gohome
+                port:
+                  number: 80

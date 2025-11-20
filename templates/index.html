@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Config.Title}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">{{.Config.Title}}</h1>
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span class="status-text">{{if .DemoMode}}demo mode{{else}}cluster online{{end}}</span>
+            </div>
+            {{if .DemoMode}}
+            <div class="demo-indicator">
+                <span class="demo-icon">🚧</span>
+                <span class="demo-text">kubernetes not connected - showing demo data</span>
+            </div>
+            {{end}}
+        </header>
+
+        {{if .Error}}
+        <div class="error-message">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">{{.Error}}</div>
+        </div>
+        {{end}}
+
+        <main class="main">
+            {{if .Ingresses}}
+            <section class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">🔗</span>
+                    Services
+                    <span class="count">({{len .Ingresses}})</span>
+                </h2>
+                <div class="grid">
+                    {{range .Ingresses}}
+                    <a href="{{.URL}}" target="_blank" class="card service-card">
+                        <div class="card-header">
+                            <div class="service-name">{{.Name}}</div>
+                            <div class="external-link">↗</div>
+                        </div>
+                        <div class="card-body">
+                            <div class="service-url">{{.Host}}</div>
+                        </div>
+                    </a>
+                    {{end}}
+                </div>
+            </section>
+            {{end}}
+
+            {{if .Config.Bookmarks}}
+            <section class="section">
+                <h2 class="section-title">
+                    <span class="section-icon">📚</span>
+                    Bookmarks
+                    <span class="count">({{len .Config.Bookmarks}})</span>
+                </h2>
+
+                {{$currentCategory := ""}}
+                {{range .Config.Bookmarks}}
+                    {{if ne .Category $currentCategory}}
+                        {{if ne $currentCategory ""}}
+                            </div>
+                        {{end}}
+                        <h3 class="category-title">{{.Category}}</h3>
+                        <div class="grid">
+                        {{$currentCategory = .Category}}
+                    {{end}}
+                    <a href="{{.URL}}" target="_blank" class="card bookmark-card">
+                        <div class="card-header">
+                            <div class="bookmark-name">{{.Name}}</div>
+                            <div class="external-link">↗</div>
+                        </div>
+                    </a>
+                {{end}}
+                {{if .Config.Bookmarks}}
+                </div>
+                {{end}}
+            </section>
+            {{end}}
+
+            {{if and (not .Ingresses) (not .Config.Bookmarks) (not .Error)}}
+            <div class="empty-state">
+                <div class="empty-icon">🏠</div>
+                <h3>Welcome to your home cluster</h3>
+                <p>No services or bookmarks configured yet.</p>
+            </div>
+            {{end}}
+        </main>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <span class="footer-text">powered by kubernetes</span>
+                <span class="footer-separator">•</span>
+                <span class="footer-text" id="timestamp"></span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Update timestamp
+        function updateTimestamp() {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString('en-US', {
+                hour12: false,
+                timeZoneName: 'short'
+            });
+            document.getElementById('timestamp').textContent = timestamp;
+        }
+
+        updateTimestamp();
+        setInterval(updateTimestamp, 1000);
+
+        // Add loading animation for links
+        document.querySelectorAll('a[target="_blank"]').forEach(link => {
+            link.addEventListener('click', function() {
+                this.style.opacity = '0.7';
+            });
+        });
+    </script>
+</body>
+</html>

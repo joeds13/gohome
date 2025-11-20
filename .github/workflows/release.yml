@@ -1,0 +1,215 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: joeds13/gohome
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+          cache: true
+
+      - name: Get release version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building release ${VERSION}"
+
+      - name: Run tests and quality checks
+        run: |
+          go mod download
+          go test -v ./...
+          go vet ./...
+          go fmt ./...
+
+      - name: Build binaries for multiple platforms
+        run: |
+          mkdir -p dist
+
+          # Build for different platforms
+          PLATFORMS=(
+            "linux/amd64"
+            "linux/arm64"
+            "linux/arm"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+
+          for platform in "${PLATFORMS[@]}"; do
+            GOOS=${platform%/*}
+            GOARCH=${platform#*/}
+            output_name="gohome-${GOOS}-${GOARCH}"
+            if [ "$GOOS" = "windows" ]; then
+              output_name+=".exe"
+            fi
+
+            echo "Building for $GOOS/$GOARCH..."
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+              -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              -o "dist/${output_name}" \
+              ./cmd/main.go
+          done
+
+      - name: Create checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=GoHome
+            org.opencontainers.image.description=Kubernetes personal homepage for home clusters
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+
+      - name: Build and push multi-arch Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+            BUILD_TIME=${{ github.event.repository.pushed_at }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Create Kubernetes manifests archive
+        run: |
+          # Create release-specific manifests
+          mkdir -p release-manifests
+          cp -r k8s/* release-manifests/
+
+          # Update image tags in manifests
+          sed -i "s|image: gohome:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}|g" release-manifests/deployment.yaml
+
+          # Create archive
+          tar -czf kubernetes-manifests-${{ steps.version.outputs.VERSION }}.tar.gz release-manifests/
+
+      - name: Create release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << EOF
+          ## 🚀 GoHome ${{ steps.version.outputs.VERSION }}
+
+          ### 📦 Container Images
+
+          Multi-architecture container images are available:
+
+          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}\`
+          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`
+
+          **Supported architectures:**
+          - linux/amd64
+          - linux/arm64
+          - linux/arm/v7
+
+          ### 📋 Installation
+
+          **Install:**
+          \`\`\`bash
+          kubectl apply -k https://github.com/joeds13/gohome/k8s?ref=${{ steps.version.outputs.VERSION }}
+          \`\`\`
+
+          ### 🔒 Security
+
+          - Container vulnerability scan results available in Security tab
+          - SBOM (Software Bill of Materials) included with release
+          - All binaries signed and checksummed
+
+          ### 📁 Assets
+
+          - Pre-compiled binaries for multiple platforms
+          - Kubernetes manifests
+          - Checksums and SBOM
+
+          ### 🏠 What's GoHome?
+
+          GoHome is a modern, clean personal homepage for Kubernetes home clusters that:
+
+          - 🔗 Automatically discovers and displays your Kubernetes ingresses
+          - 📚 Supports custom bookmarks via ConfigMaps
+          - 🎨 Features a beautiful dark theme with monospaced fonts
+          - 🔒 Runs securely with minimal RBAC permissions
+          - 📱 Works perfectly on desktop and mobile devices
+
+          Perfect for homelab enthusiasts who want a clean, functional dashboard for their self-hosted services!
+          EOF
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*
+            kubernetes-manifests-${{ steps.version.outputs.VERSION }}.tar.gz
+            sbom.spdx.json
+          body_path: release_notes.md
+          generate_release_notes: true
+          make_latest: true
