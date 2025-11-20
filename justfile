@@ -165,3 +165,7 @@ test-demo:
     sleep 3
     curl -f http://localhost:8080/health || echo "Health check failed"
     pkill {{app_name}} || true
+
+# Update Github Action versions
+github-action-update:
+    npx actions-up -y
