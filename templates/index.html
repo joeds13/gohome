@@ -13,16 +13,6 @@
     <div class="container">
         <header class="header">
             <h1 class="title">{{.Config.Title}}</h1>
-            <div class="status-indicator">
-                <span class="status-dot"></span>
-                <span class="status-text">{{if .DemoMode}}demo mode{{else}}cluster online{{end}}</span>
-            </div>
-            {{if .DemoMode}}
-            <div class="demo-indicator">
-                <span class="demo-icon">🚧</span>
-                <span class="demo-text">kubernetes not connected - showing demo data</span>
-            </div>
-            {{end}}
         </header>
 
         {{if .Error}}
@@ -95,6 +85,18 @@
             </div>
             {{end}}
         </main>
+
+        {{if .DemoMode}}
+        <div class="demo-indicator">
+            <span class="demo-icon">🚧</span>
+            <span class="demo-text">kubernetes not connected - showing demo data</span>
+        </div>
+        {{else}}
+        <div class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text">cluster online</span>
+        </div>
+        {{end}}
 
         <footer class="footer">
             <div class="footer-content">
