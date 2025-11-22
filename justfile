@@ -21,6 +21,11 @@ build:
         -ldflags="-s -w -X main.Version={{`git describe --tags --always --dirty 2>/dev/null || echo 'dev'`}} -X main.BuildTime={{`date -u +%Y-%m-%dT%H:%M:%SZ`}}" \
         -o bin/{{app_name}} ./cmd/main.go
 
+# Run the application locally with reloading watcher
+dev:
+    @echo "Running {{app_name}} locally with live reload on http://localhost:8080 ..."
+    watchexec -e go,html,css,tmpl,js -r -- go run cmd/main.go
+
 # Run the application locally
 run:
     @echo "Running {{app_name}} locally..."
