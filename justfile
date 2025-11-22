@@ -117,6 +117,7 @@ config-edit:
 dev-up:
     @echo "Starting local development environment..."
     docker-compose up -d --build
+    @echo "Running on http://localhost:8080"
 
 # Stop local development environment
 dev-down:
