@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 
 	"os"
 	"path/filepath"
@@ -23,11 +24,10 @@ const (
 
 // IngressInfo represents a simplified ingress for display
 type IngressInfo struct {
-	Name      string
-	Namespace string
-	Host      string
-	Path      string
-	URL       string
+	Name string
+	Host string
+	Path string
+	URL  string
 }
 
 // K8sClient wraps the Kubernetes client
@@ -134,9 +134,13 @@ func (k *K8sClient) GetVisibleIngresses(ctx context.Context) ([]IngressInfo, err
 
 // extractIngressInfo converts a Kubernetes ingress to our simplified structure
 func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInfo {
+	name := ingress.Name
+	if strings.HasSuffix(name, "-ingress") {
+		name = strings.TrimSuffix(name, "-ingress")
+	}
+
 	info := IngressInfo{
-		Name:      ingress.Name,
-		Namespace: ingress.Namespace,
+		Name: name,
 	}
 
 	// Extract the first rule and host
@@ -175,39 +179,34 @@ func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInf
 func (k *K8sClient) getDemoIngresses() []IngressInfo {
 	return []IngressInfo{
 		{
-			Name:      "grafana",
-			Namespace: "monitoring",
-			Host:      "grafana.example.com",
-			Path:      "/",
-			URL:       "https://grafana.example.com/",
+			Name: "grafana",
+			Host: "grafana.example.com",
+			Path: "/",
+			URL:  "https://grafana.example.com/",
 		},
 		{
-			Name:      "home-assistant",
-			Namespace: "home-automation",
-			Host:      "hass.example.com",
-			Path:      "/",
-			URL:       "https://hass.example.com/",
+			Name: "home-assistant",
+			Host: "hass.example.com",
+			Path: "/",
+			URL:  "https://hass.example.com/",
 		},
 		{
-			Name:      "jellyfin",
-			Namespace: "media",
-			Host:      "media.example.com",
-			Path:      "/",
-			URL:       "https://media.example.com/",
+			Name: "jellyfin",
+			Host: "media.example.com",
+			Path: "/",
+			URL:  "https://media.example.com/",
 		},
 		{
-			Name:      "nextcloud",
-			Namespace: "productivity",
-			Host:      "cloud.example.com",
-			Path:      "/",
-			URL:       "https://cloud.example.com/",
+			Name: "nextcloud",
+			Host: "cloud.example.com",
+			Path: "/",
+			URL:  "https://cloud.example.com/",
 		},
 		{
-			Name:      "portainer",
-			Namespace: "management",
-			Host:      "portainer.example.com",
-			Path:      "/",
-			URL:       "https://portainer.example.com/",
+			Name: "portainer",
+			Host: "portainer.example.com",
+			Path: "/",
+			URL:  "https://portainer.example.com/",
 		},
 	}
 }
