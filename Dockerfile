@@ -4,8 +4,6 @@ FROM golang:1.25-alpine AS builder
 # Build arguments
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
 
 WORKDIR /app
 
@@ -22,7 +20,7 @@ RUN go mod download
 COPY . .
 
 # Build the application with version information
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+RUN CGO_ENABLED=0 go build \
     -a -installsuffix cgo \
     -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
     -o main ./cmd/main.go
