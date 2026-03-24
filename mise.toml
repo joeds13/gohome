@@ -1,5 +1,201 @@
 [tools]
 go = "latest"
-just = "latest"
 kustomize = "latest"
 watchexec = "latest"
+
+
+[tasks.build]
+description = "Build the Go binary"
+run = """
+echo "Building {{app_name}}..."
+CGO_ENABLED=0 GOOS=${GOOS:-linux} GOARCH=${GOARCH:-amd64} go build -a -installsuffix cgo \
+    -ldflags="-s -w -X main.Version=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev') -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o bin/gohome ./cmd/main.go
+"""
+
+[tasks.dev]
+description = "Run the application locally with reloading watcher"
+run = """
+echo "Running gohome locally with live reload on http://localhost:8080 ..."
+watchexec -e go,html,css,tmpl,js -r -- go run cmd/main.go
+"""
+
+[tasks.go-run]
+description = "Run the application locally"
+run = """
+echo "Running gohome locally..."
+go run cmd/main.go
+"""
+
+[tasks.go-run-demo]
+description = "Run the application in demo mode (without Kubernetes)"
+run = """
+echo "Running gohome in demo mode..."
+KUBECONFIG= go run cmd/main.go
+"""
+
+[tasks.test]
+description = "Run tests"
+run = """
+echo "Running tests..."
+go test -v ./...
+"""
+
+[tasks.fmt]
+description = "Format Go code"
+run = "go fmt ./..."
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.deps]
+description = "Download dependencies"
+run = """
+go mod download
+go mod tidy
+"""
+
+[tasks.setup]
+description = "Set up development environment"
+run = """
+echo "Setting up development environment..."
+mise install
+go mod download
+echo "Development environment ready!"
+"""
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = """
+echo "Cleaning build artifacts..."
+rm -rf bin/
+docker rmi gohome:latest 2>/dev/null || true
+"""
+
+[tasks.docker-build]
+description = "Build Docker image"
+run = """
+echo "Building Docker image gohome:latest..."
+docker build -t gohome:latest \
+    --build-arg VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev') \
+    --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) .
+"""
+
+[tasks.docker-push]
+description = "Push Docker image to registry"
+depends = ["docker-build"]
+run = """
+if [ -z "${REGISTRY}" ]; then
+    echo "Error: REGISTRY environment variable not set."
+    echo "Use: REGISTRY=your-registry.com mise run docker-push"
+    exit 1
+fi
+echo "Pushing ${REGISTRY}/gohome:latest..."
+docker tag gohome:latest ${REGISTRY}/gohome:latest
+docker push ${REGISTRY}/gohome:latest
+"""
+
+[tasks.logs]
+description = "Show application logs"
+run = "kubectl logs -l app=gohome -n ${NAMESPACE:-default} --tail=100 -f"
+
+[tasks.status]
+description = "Show deployment status"
+run = """
+echo "Deployment status:"
+kubectl get deployment gohome -n ${NAMESPACE:-default}
+echo "\nPods:"
+kubectl get pods -l app=gohome -n ${NAMESPACE:-default}
+echo "\nService:"
+kubectl get service gohome -n ${NAMESPACE:-default}
+echo "\nIngress:"
+kubectl get ingress gohome -n ${NAMESPACE:-default}
+"""
+
+[tasks.port-forward]
+description = "Port forward to local machine"
+run = """
+echo "Port forwarding gohome to localhost:8080..."
+kubectl port-forward svc/gohome 8080:80 -n ${NAMESPACE:-default}
+"""
+
+[tasks.restart]
+description = "Restart the deployment"
+run = """
+kubectl rollout restart deployment/gohome -n ${NAMESPACE:-default}
+kubectl rollout status deployment/gohome -n ${NAMESPACE:-default}
+"""
+
+[tasks.config-edit]
+description = "Edit the configuration ConfigMap"
+run = "kubectl edit configmap gohome-config -n ${NAMESPACE:-default}"
+
+[tasks.dev-up]
+description = "Start local development environment"
+run = """
+echo "Starting local development environment..."
+docker-compose up -d --build
+echo "\nRunning on: http://localhost:8080"
+"""
+
+[tasks.dev-down]
+description = "Stop local development environment"
+run = """
+echo "Stopping local development environment..."
+docker-compose down
+"""
+
+[tasks.dev-logs]
+description = "Show development container logs"
+run = "docker-compose logs -f gohome"
+
+[tasks.dev-restart]
+description = "Restart development environment"
+run = "docker-compose restart gohome"
+
+[tasks.dev-demo]
+description = "Start development environment in demo mode (no Kubernetes)"
+run = """
+echo "Starting development environment in demo mode..."
+KUBECONFIG= docker-compose up
+"""
+
+[tasks.manifests]
+description = "Generate manifests with custom image"
+run = """
+if [ -z "${REGISTRY}" ]; then
+    echo "Error: REGISTRY environment variable not set."
+    echo "Use: REGISTRY=your-registry.com mise run manifests"
+    exit 1
+fi
+echo "Generating manifests for ${REGISTRY}/gohome:latest..."
+sed 's|image: ghcr.io/joeds13/gohome:latest|image: '"${REGISTRY}"'/gohome:latest|g' k8s/deployment.yaml > k8s/deployment-custom.yaml
+echo "Generated k8s/deployment-custom.yaml"
+"""
+
+[tasks.version]
+description = "Show version information"
+run = """
+echo "GoHome version: $(git describe --tags --always --dirty 2>/dev/null || echo 'dev')"
+echo "Build time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Git commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
+echo "Git branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+"""
+
+[tasks.test-demo]
+description = "Test local setup (demo mode)"
+run = """
+echo "Testing demo mode setup..."
+echo "Building binary..."
+mise run build
+echo "Running health check..."
+KUBECONFIG= timeout 10s ./bin/gohome &
+sleep 3
+curl -f http://localhost:8080/health || echo "Health check failed"
+pkill gohome || true
+"""
+
+[tasks.github-action-update]
+description = "Update Github Action versions"
+run = "npx actions-up -y"

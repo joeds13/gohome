@@ -71,10 +71,10 @@ git clone https://github.com/joeds13/gohome.git
 cd gohome
 
 # Build the Docker image
-just docker-build
+mise docker-build
 
 # Generate custom manifests with your image
-REGISTRY=your-registry.com just manifests
+REGISTRY=your-registry.com mise manifests
 
 # Deploy with custom image
 kubectl apply -f k8s/deployment-custom.yaml
@@ -246,41 +246,41 @@ For local development outside of Kubernetes:
 
 ```bash
 # Set up development environment
-just setup
+mise setup
 
 # Install dependencies
-just deps
+mise deps
 
 # Run locally (requires kubeconfig for your cluster)
 export KUBECONFIG=/path/to/your/kubeconfig
-just run
+mise go-run
 
 # Run in demo mode (no Kubernetes required)
-just run-demo
+mise go-run-demo
 
 # Or use Docker Compose for containerized development
-just dev-up
+mise dev-up
 
 # Run Docker Compose in demo mode
-just dev-demo
+mise dev-demo
 ```
 
 ### Building
 
 ```bash
 # Build for current platform (with version info)
-just build
+mise build
 
 # Build Docker image (multi-arch capable)
-just docker-build
+mise docker-build
 
 # Cross-compile for different platforms
-GOOS=linux GOARCH=amd64 just build
-GOOS=linux GOARCH=arm64 just build
-GOOS=darwin GOARCH=arm64 just build
+GOOS=linux GOARCH=amd64 mise build
+GOOS=linux GOARCH=arm64 mise build
+GOOS=darwin GOARCH=arm64 mise build
 
 # Show version information
-just version
+mise version
 ```
 
 ### GitHub Actions Integration
@@ -311,50 +311,6 @@ Images are published to:
 
 All images support multiple architectures and are automatically selected based on your system.
 
-### Available Commands
-
-View all available commands:
-```bash
-just --list
-```
-
-Common commands:
-```bash
-# Development
-just run              # Run locally
-just run-demo         # Run in demo mode (no Kubernetes)
-just test             # Run tests
-just fmt              # Format Go code
-just vet              # Run go vet
-just deps             # Download dependencies
-just setup            # Set up development environment
-
-# Building
-just build            # Build binary
-just docker-build     # Build Docker image
-just docker-push      # Push image to registry
-just clean            # Clean build artifacts
-just version          # Show version information
-
-# Docker Compose Development
-just dev-up           # Start with Docker Compose
-just dev-down         # Stop Docker Compose  
-just dev-logs         # Show development logs
-just dev-restart      # Restart development environment
-just dev-demo         # Start in demo mode
-
-# Kubernetes Management
-just status           # Show deployment status
-just logs             # View application logs
-just restart          # Restart deployment
-just config-edit      # Edit ConfigMap
-just port-forward     # Port forward to localhost
-just manifests        # Generate manifests with custom image
-
-# Testing
-just test-demo        # Test demo mode setup
-```
-
 ## Security
 
 ### RBAC Permissions
@@ -382,11 +338,11 @@ GoHome requires minimal permissions:
 **Bookmarks not appearing**
 - Check ConfigMap exists: `kubectl get configmap gohome-config`
 - Verify ConfigMap format matches the expected pattern
-- Edit configuration: `just config-edit`
+- Edit configuration: `mise config-edit`
 
 **Page won't load**
-- Check pod logs: `just logs`
-- Verify service is running: `just status`
+- Check pod logs: `mise logs`
+- Verify service is running: `mise status`
 - Check ingress configuration: `kubectl describe ingress gohome`
 
 ### Debug Mode
@@ -401,10 +357,10 @@ env:
 ### Quick Debugging Commands
 
 ```bash
-just status           # Show deployment status
-just logs             # View application logs
-just port-forward     # Access app locally via port forward
-just test-demo        # Test demo mode setup locally
+mise status           # Show deployment status
+mise logs             # View application logs
+mise port-forward     # Access app locally via port forward
+mise test-demo        # Test demo mode setup locally
 kubectl describe pod -l app=gohome -n gohome  # Describe pods
 kubectl exec -it deployment/gohome -n gohome -- /bin/sh  # Shell access
 ```
@@ -439,8 +395,8 @@ The codebase is organized for easy extension:
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes
-4. Run quality checks: `just test && just vet && just fmt`
-5. Test the build: `just build && just docker-build`
+4. Run quality checks: `mise test && mise vet && mise fmt`
+5. Test the build: `mise build && mise docker-build`
 6. Submit a pull request
 
 ### Development Workflow
