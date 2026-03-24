@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sort"
-	"strings"
-
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,10 +23,12 @@ const (
 
 // IngressInfo represents a simplified ingress for display
 type IngressInfo struct {
-	Name string
-	Host string
-	Path string
-	URL  string
+	Name            string
+	Host            string
+	Path            string
+	URL             string
+	Tailscale       bool
+	TailscaleFunnel bool
 }
 
 // K8sClient wraps the Kubernetes client
@@ -132,6 +133,20 @@ func (k *K8sClient) GetVisibleIngresses(ctx context.Context) ([]IngressInfo, err
 	return visibleIngresses, nil
 }
 
+// isTailscaleIngress returns true when the ingress is managed by the Tailscale operator.
+// The operator sets ingressClassName to "tailscale" and uses a wildcard host in spec.rules,
+// publishing the real hostname via status.loadBalancer.ingress[].hostname.
+func isTailscaleIngress(ingress *networkingv1.Ingress) bool {
+	if ingress.Spec.IngressClassName != nil && *ingress.Spec.IngressClassName == "tailscale" {
+		return true
+	}
+	// Also check the legacy annotation used by some versions of the operator
+	if ingress.Annotations["kubernetes.io/ingress.class"] == "tailscale" {
+		return true
+	}
+	return false
+}
+
 // extractIngressInfo converts a Kubernetes ingress to our simplified structure
 func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInfo {
 	name := ingress.Name
@@ -140,33 +155,49 @@ func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInf
 	}
 
 	info := IngressInfo{
-		Name: name,
+		Name:            name,
+		Tailscale:       isTailscaleIngress(ingress),
+		TailscaleFunnel: isTailscaleIngress(ingress) && ingress.Annotations["tailscale.com/funnel"] == "true",
 	}
 
-	// Extract the first rule and host
+	// Extract the first path from spec rules if available
 	if len(ingress.Spec.Rules) > 0 {
 		rule := ingress.Spec.Rules[0]
-		info.Host = rule.Host
-
-		// Extract the first path if available
 		if rule.HTTP != nil && len(rule.HTTP.Paths) > 0 {
 			info.Path = rule.HTTP.Paths[0].Path
 		}
+	}
 
-		// Determine the protocol (check for TLS)
+	if info.Tailscale {
+		// Tailscale ingresses use a wildcard host in spec.rules; the real hostname is
+		// assigned by the operator and published in the load balancer status.
+		for _, lb := range ingress.Status.LoadBalancer.Ingress {
+			if lb.Hostname != "" {
+				info.Host = lb.Hostname
+				break
+			}
+		}
+		// Tailscale always terminates TLS for both VPN-only and Funnel ingresses.
+		if info.Host != "" {
+			info.URL = fmt.Sprintf("https://%s%s", info.Host, info.Path)
+		}
+	} else {
+		// Standard ingress: host comes from spec.rules
+		if len(ingress.Spec.Rules) > 0 {
+			info.Host = ingress.Spec.Rules[0].Host
+		}
+
+		// Determine the protocol by checking for a matching TLS entry
 		protocol := "http"
-		if len(ingress.Spec.TLS) > 0 {
-			for _, tls := range ingress.Spec.TLS {
-				for _, host := range tls.Hosts {
-					if host == info.Host {
-						protocol = "https"
-						break
-					}
+		for _, tls := range ingress.Spec.TLS {
+			for _, host := range tls.Hosts {
+				if host == info.Host {
+					protocol = "https"
+					break
 				}
 			}
 		}
 
-		// Construct the URL
 		if info.Host != "" {
 			info.URL = fmt.Sprintf("%s://%s%s", protocol, info.Host, info.Path)
 		}
@@ -201,6 +232,21 @@ func (k *K8sClient) getDemoIngresses() []IngressInfo {
 			Host: "cloud.example.com",
 			Path: "/",
 			URL:  "https://cloud.example.com/",
+		},
+		{
+			Name:      "open-webui",
+			Host:      "ai.example-tailnet.ts.net",
+			Path:      "/",
+			URL:       "https://ai.example-tailnet.ts.net/",
+			Tailscale: true,
+		},
+		{
+			Name:            "open-webui-funnel",
+			Host:            "ai.snowy-galaxy.ts.net",
+			Path:            "/",
+			URL:             "https://ai.snowy-galaxy.ts.net/",
+			Tailscale:       true,
+			TailscaleFunnel: true,
 		},
 		{
 			Name: "portainer",

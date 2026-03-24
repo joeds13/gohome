@@ -218,9 +218,15 @@ body {
 
 .card-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     margin-bottom: 0.75rem;
+}
+
+.service-name-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .card-body {
@@ -233,6 +239,7 @@ body {
 }
 
 .service-name {
+    display: inline;
     font-size: 1rem;
     font-weight: 500;
     color: var(--text-primary);
@@ -244,6 +251,33 @@ body {
     color: var(--accent-primary);
     font-weight: 400;
     word-break: break-all;
+}
+
+/* Tailscale service card variant */
+.service-card--tailscale::before {
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+}
+
+.service-card--tailscale:hover {
+    border-color: #2563eb;
+}
+
+.tailscale-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.2rem;
+    background: rgba(37, 99, 235, 0.15);
+    border: 1px solid rgba(37, 99, 235, 0.4);
+    border-radius: 0.25rem;
+    color: #60a5fa;
+    line-height: 0;
+}
+
+.tailscale-badge--funnel {
+    background: rgba(217, 119, 6, 0.15);
+    border-color: rgba(217, 119, 6, 0.4);
+    color: #f59e0b;
 }
 
 /* Bookmark cards */

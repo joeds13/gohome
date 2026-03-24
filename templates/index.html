@@ -32,9 +32,25 @@
                 </h2>
                 <div class="grid">
                     {{range .Ingresses}}
-                    <a href="{{.URL}}" target="_blank" class="card service-card">
+                    <a href="{{.URL}}" target="_blank" class="card service-card{{if .Tailscale}} service-card--tailscale{{end}}">
                         <div class="card-header">
-                            <div class="service-name">{{.Name}}</div>
+                            <div class="service-name-group">
+                                <div class="service-name">{{.Name}}</div>
+                                {{if .Tailscale}}<div class="tailscale-badge{{if .TailscaleFunnel}} tailscale-badge--funnel{{end}}" title="{{if .TailscaleFunnel}}Tailscale Funnel (public){{else}}Tailscale (VPN only){{end}}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="14" height="14" fill="currentColor" aria-label="Tailscale">
+                                        <!-- Tailscale logo mark: 3×3 dot grid, corners + centre filled -->
+                                        <circle cx="15" cy="15" r="12"/>
+                                        <circle cx="50" cy="15" r="12" opacity="0.35"/>
+                                        <circle cx="85" cy="15" r="12"/>
+                                        <circle cx="15" cy="50" r="12" opacity="0.35"/>
+                                        <circle cx="50" cy="50" r="12"/>
+                                        <circle cx="85" cy="50" r="12" opacity="0.35"/>
+                                        <circle cx="15" cy="85" r="12"/>
+                                        <circle cx="50" cy="85" r="12" opacity="0.35"/>
+                                        <circle cx="85" cy="85" r="12"/>
+                                    </svg>
+                                </div>{{end}}
+                            </div>
                             <div class="external-link">↗</div>
                         </div>
                         <div class="card-body">
