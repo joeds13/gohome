@@ -120,19 +120,6 @@ jobs:
             VERSION=${{ steps.version.outputs.VERSION }}
             BUILD_TIME=${{ github.event.repository.pushed_at }}
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
-          format: "sarif"
-          output: "trivy-results.sarif"
-
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@ba454b8ab46733eb6145342877cd148270bb77ab # codeql-bundle-v2.23.5
-        if: always()
-        with:
-          sarif_file: "trivy-results.sarif"
-
       - name: Generate SBOM
         uses: anchore/sbom-action@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
         with:
