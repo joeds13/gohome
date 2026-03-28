@@ -15,15 +15,14 @@ WORKDIR /app
 # Install ca-certificates (needed for HTTPS in final image)
 RUN apk add --no-cache ca-certificates
 
-# Copy go mod files and download dependencies (cached layer)
-COPY go.mod go.sum ./
-RUN go mod download
-
 # Copy source code
 COPY . .
 
 # Cross-compile natively — no QEMU involved
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+# Cache mounts persist the Go build cache and module cache across runs
+RUN --mount=type=cache,target=/root/.cache/go-build,id=go-build-${TARGETARCH} \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
     -o main ./cmd/main.go
 
