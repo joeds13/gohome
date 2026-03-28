@@ -1,6 +1,6 @@
 module gohome
 
-go 1.25
+go 1.26
 
 require (
 	k8s.io/api v0.34.2
