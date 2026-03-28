@@ -1,27 +1,29 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+# Always run on the native host architecture to avoid QEMU emulation
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 # Build arguments
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
 
+# Injected by buildx for cross-compilation
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /app
 
-# Install git for go mod download
-RUN apk add --no-cache git ca-certificates
+# Install ca-certificates (needed for HTTPS in final image)
+RUN apk add --no-cache ca-certificates
 
-# Copy go mod files
+# Copy go mod files and download dependencies (cached layer)
 COPY go.mod go.sum ./
-
-# Download dependencies
 RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the application with version information
-RUN CGO_ENABLED=0 go build \
-    -a -installsuffix cgo \
+# Cross-compile natively — no QEMU involved
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
     -o main ./cmd/main.go
 
@@ -44,19 +46,11 @@ LABEL org.opencontainers.image.title="GoHome" \
 
 WORKDIR /app
 
-# Copy ca-certificates from builder stage for HTTPS requests
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-# Copy the binary from builder stage
 COPY --from=builder /app/main .
-
-# Copy static files and templates
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/static ./static
 
 EXPOSE 8080
-
-# Note: HEALTHCHECK removed as distroless images don't include wget/curl
-# Health checks should be configured at the orchestration level (e.g., Kubernetes)
 
 CMD ["./main"]
