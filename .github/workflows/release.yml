@@ -1,8 +1,9 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "[0-9][0-9][0-9][0-9].[0-9]*"
 
 env:
   REGISTRY: ghcr.io
@@ -96,9 +97,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=ref,event=tag
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=GoHome

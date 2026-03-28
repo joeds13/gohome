@@ -3,7 +3,6 @@ go = "latest"
 kustomize = "latest"
 watchexec = "latest"
 
-
 [tasks.build]
 description = "Build the Go binary"
 run = """
@@ -181,6 +180,45 @@ echo "GoHome version: $(git describe --tags --always --dirty 2>/dev/null || echo
 echo "Build time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Git commit: $(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
 echo "Git branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+"""
+
+[tasks.release]
+description = "Tag and push a new CalVer release (<year>.<n>) from main branch — triggers the GitHub Actions release pipeline"
+run = """
+# Ensure we are on main
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" != "main" ]; then
+    echo "Error: releases must be cut from the 'main' branch (currently on '${BRANCH}')."
+    exit 1
+fi
+
+# Ensure the working tree is clean
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "Error: working tree has uncommitted or staged changes. Commit or stash them first."
+    exit 1
+fi
+
+# Pull the latest commits
+git pull --ff-only origin main
+
+# Compute the next CalVer tag: <year>.<incrementing-int>
+YEAR=$(date +%Y)
+LAST=$(git tag --list "${YEAR}.*" | sed "s/${YEAR}\\.//" | grep -E '^[0-9]+$' | sort -n | tail -1)
+if [ -z "$LAST" ]; then
+    NEXT=1
+else
+    NEXT=$((LAST + 1))
+fi
+
+TAG="${YEAR}.${NEXT}"
+echo "Creating release tag: ${TAG}"
+
+git tag -a "${TAG}" -m "Release ${TAG}"
+git push origin "${TAG}"
+
+echo ""
+echo "✓ Tagged and pushed ${TAG}"
+echo "  GitHub Actions will now build and publish the release artifacts."
 """
 
 [tasks.test-demo]
