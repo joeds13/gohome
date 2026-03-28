@@ -15,7 +15,7 @@ resources:
 
 images:
   - name: ghcr.io/joeds13/gohome
-    newTag: v0.2.2
+    newTag: 2026.2
 
 namespace: gohome
 
