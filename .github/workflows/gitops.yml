@@ -47,10 +47,6 @@ jobs:
           sed -i.bak "s|ref=[^\"'&]*|ref=${VERSION}|g" "${KUSTOMIZATION}"
           rm "${KUSTOMIZATION}.bak"
 
-          echo "Updating newTag to ${VERSION} in ${KUSTOMIZATION}"
-          sed -i.bak "s/newTag: .*/newTag: ${VERSION}/" "${KUSTOMIZATION}"
-          rm "${KUSTOMIZATION}.bak"
-
           echo "--- diff ---"
           git -C gitops diff
 
