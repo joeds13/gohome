@@ -210,11 +210,12 @@ else
     NEXT=$((LAST + 1))
 fi
 
-TAG="${YEAR}.${NEXT}"
+# ensure TAG is quoted to stop YAML errors
+TAG="\\"${YEAR}.${NEXT}\\""
 echo "Creating release tag: ${TAG}"
 
 # Update kustomization.yaml newTag
-sed -i.bak "s/newTag: .*/newTag: \"${TAG}\"/" k8s/kustomization.yaml
+sed -i.bak "s/newTag: \".*\"/newTag: \"${TAG}\"/" k8s/kustomization.yaml
 rm k8s/kustomization.yaml.bak
 
 git add k8s/kustomization.yaml
