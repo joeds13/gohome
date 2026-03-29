@@ -214,8 +214,7 @@ TAG="${YEAR}.${NEXT}"
 echo "Creating release tag: ${TAG}"
 
 # Update kustomization.yaml newTag
-sed -i.bak "s/newTag: .*/newTag: \"${TAG}\"/" k8s/kustomization.yaml
-rm k8s/kustomization.yaml.bak
+cd k8s; kustomize edit set image ghcr.io/joeds13/gohome:${TAG}; cd -
 
 git add k8s/kustomization.yaml
 git commit -m "chore: bump kustomization image tag to ${TAG} [skip ci]"
