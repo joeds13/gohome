@@ -217,7 +217,7 @@ echo "Creating release tag: ${TAG}"
 cd k8s; kustomize edit set image ghcr.io/joeds13/gohome:${TAG}; cd -
 
 git add k8s/kustomization.yaml
-git commit -m "chore: bump kustomization image tag to ${TAG} [skip ci]"
+git commit -m "chore: bump kustomization image tag to ${TAG} [skip build]"
 git push origin main
 
 git tag -a "${TAG}" -m "Release ${TAG}"
