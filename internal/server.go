@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"tailscale.com/client/local"
 )
 
@@ -55,6 +56,7 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 	s.mux.HandleFunc("/", s.handleHome)
 	s.mux.HandleFunc("/health", s.handleHealth)
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
+	s.mux.Handle("/metrics", promhttp.Handler())
 
 	return s, nil
 }

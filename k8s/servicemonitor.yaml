@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gohome
+  labels:
+    app: gohome
+spec:
+  selector:
+    matchLabels:
+      app: gohome
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scheme: http
