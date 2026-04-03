@@ -9,18 +9,29 @@ import (
 	"os"
 	"time"
 
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"tailscale.com/client/local"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	k8sClient       *K8sClient
-	bookmarkManager *BookmarkManager
-	templates       *template.Template
-	port            string
-	mux             *http.ServeMux
-	tsLocalClient   *local.Client
+	k8sClient            *K8sClient
+	bookmarkManager      *BookmarkManager
+	templates            *template.Template
+	port                 string
+	mux                  *http.ServeMux
+	handler              http.Handler // instrumented handler, built once, shared by all listeners
+	tsLocalClient        *local.Client
+	ingressesDisplayed   prometheus.Gauge
+	uniqueVisitors       *prometheus.GaugeVec
+	seenVisitors         map[string]struct{}
+	seenVisitorsMu       sync.Mutex
+	httpRequestsInFlight prometheus.Gauge
+	httpRequestsTotal    *prometheus.CounterVec
+	httpRequestDuration  *prometheus.HistogramVec
 }
 
 // PageData represents the data passed to templates
@@ -45,12 +56,51 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 		port = "8080"
 	}
 
+	httpRequestsInFlight := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "gohome_http_requests_in_flight",
+		Help: "Current number of HTTP requests being served.",
+	})
+	prometheus.MustRegister(httpRequestsInFlight)
+
+	httpRequestsTotal := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "gohome_http_requests_total",
+		Help: "Total number of HTTP requests by status code and method.",
+	}, []string{"code", "method"})
+	prometheus.MustRegister(httpRequestsTotal)
+
+	httpRequestDuration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "gohome_http_request_duration_seconds",
+		Help:    "HTTP request duration in seconds by status code and method.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"code", "method"})
+	prometheus.MustRegister(httpRequestDuration)
+
+	ingressesDisplayed := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "gohome_ingresses_displayed",
+		Help: "Number of ingresses currently displayed on the homepage.",
+	})
+	prometheus.MustRegister(ingressesDisplayed)
+
+	uniqueVisitors := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gohome_unique_visitors",
+		Help: "Unique visitors that have loaded the homepage, labelled by their Tailscale email.",
+	}, []string{"email"})
+	prometheus.MustRegister(uniqueVisitors)
+
+	mux := http.NewServeMux()
+
 	s := &Server{
-		k8sClient:       k8sClient,
-		bookmarkManager: bookmarkManager,
-		templates:       templates,
-		port:            port,
-		mux:             http.NewServeMux(),
+		k8sClient:            k8sClient,
+		bookmarkManager:      bookmarkManager,
+		templates:            templates,
+		port:                 port,
+		mux:                  mux,
+		ingressesDisplayed:   ingressesDisplayed,
+		uniqueVisitors:       uniqueVisitors,
+		seenVisitors:         make(map[string]struct{}),
+		httpRequestsInFlight: httpRequestsInFlight,
+		httpRequestsTotal:    httpRequestsTotal,
+		httpRequestDuration:  httpRequestDuration,
 	}
 
 	s.mux.HandleFunc("/", s.handleHome)
@@ -58,13 +108,27 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
 	s.mux.Handle("/metrics", promhttp.Handler())
 
+	// Build the instrumented handler once so that both the local TCP listener
+	// and the tsnet listener share a single middleware chain and a single
+	// in-flight gauge. Constructing it twice would still point at the same
+	// metric objects, but would create two independent chain instances and
+	// make the sharing implicit rather than guaranteed.
+	s.handler = promhttp.InstrumentHandlerInFlight(s.httpRequestsInFlight,
+		promhttp.InstrumentHandlerCounter(s.httpRequestsTotal,
+			promhttp.InstrumentHandlerDuration(s.httpRequestDuration,
+				s.mux,
+			),
+		),
+	)
+
 	return s, nil
 }
 
-// Handler returns the HTTP handler for the server, so it can be served
-// over any listener (local TCP, tsnet, etc.).
+// Handler returns the shared instrumented handler for the server, so it can
+// be served over any listener (local TCP, tsnet, etc.) with all listeners
+// contributing to the same set of metrics.
 func (s *Server) Handler() http.Handler {
-	return s.mux
+	return s.handler
 }
 
 // SetTailscaleClient wires up the tsnet LocalClient so that per-request
@@ -76,13 +140,13 @@ func (s *Server) SetTailscaleClient(lc *local.Client) {
 // Start starts the HTTP server on the configured local port.
 func (s *Server) Start() error {
 	log.Printf("Server starting on port %s", s.port)
-	return http.ListenAndServe(":"+s.port, s.mux)
+	return http.ListenAndServe(":"+s.port, s.handler)
 }
 
 // ServeListener serves the HTTP handler over an already-established net.Listener.
 // This is used to serve over a tsnet listener.
 func (s *Server) ServeListener(l net.Listener) error {
-	srv := &http.Server{Handler: s.mux}
+	srv := &http.Server{Handler: s.handler}
 	log.Printf("Serving over listener: %s", l.Addr())
 	return srv.Serve(l)
 }
@@ -106,6 +170,18 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	// Resolve the Tailscale identity of the requesting peer, if available.
 	tailscaleUser := s.resolveViewer(ctx, r)
 
+	// Record unique visitors by email. Only set the gauge label the first time
+	// we see each address so the series persists across scrapes rather than
+	// fluctuating on every request.
+	if tailscaleUser != "" {
+		s.seenVisitorsMu.Lock()
+		if _, seen := s.seenVisitors[tailscaleUser]; !seen {
+			s.seenVisitors[tailscaleUser] = struct{}{}
+			s.uniqueVisitors.With(prometheus.Labels{"email": tailscaleUser}).Set(1)
+		}
+		s.seenVisitorsMu.Unlock()
+	}
+
 	// Load ingresses
 	ingresses, err := s.k8sClient.GetVisibleIngresses(ctx)
 	if err != nil {
@@ -113,6 +189,9 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		// Continue with empty ingresses list instead of failing
 		ingresses = []IngressInfo{}
 	}
+
+	// Update the ingresses-displayed gauge.
+	s.ingressesDisplayed.Set(float64(len(ingresses)))
 
 	// Prepare page data
 	data := PageData{

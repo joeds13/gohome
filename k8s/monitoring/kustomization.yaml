@@ -7,5 +7,6 @@ metadata:
   name: gohome-monitoring
 
 resources:
-- ../
-- ../servicemonitor.yaml
+  - ../
+  - ../servicemonitor.yaml
+  - grafana-dashboard.yaml
