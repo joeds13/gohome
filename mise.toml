@@ -3,6 +3,9 @@ go = "1.26"
 kustomize = "latest"
 watchexec = "latest"
 
+[env]
+TSNET_HOSTNAME = "gohome-dev"
+
 [tasks.build]
 description = "Build the Go binary"
 run = """
