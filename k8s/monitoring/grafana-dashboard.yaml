@@ -718,6 +718,3 @@ data:
       "uid": "gohome",
       "version": 1
     }
-```
-
-Now let me update the kustomization to include the new file:
