@@ -112,7 +112,7 @@
         {{else}}
         <div class="status-indicator">
             <span class="status-dot"></span>
-            <span class="status-text">cluster online</span>
+            <span class="status-text">cluster online{{if .TailscaleUser}}: {{.TailscaleUser}}{{end}}</span>
         </div>
         {{end}}
 

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"tailscale.com/client/local"
 )
 
 // Server represents the HTTP server
@@ -17,14 +19,16 @@ type Server struct {
 	templates       *template.Template
 	port            string
 	mux             *http.ServeMux
+	tsLocalClient   *local.Client
 }
 
 // PageData represents the data passed to templates
 type PageData struct {
-	Config    *Config
-	Ingresses []IngressInfo
-	Error     string
-	DemoMode  bool
+	Config        *Config
+	Ingresses     []IngressInfo
+	Error         string
+	DemoMode      bool
+	TailscaleUser string // email of the viewing tailnet peer, empty for local requests
 }
 
 // NewServer creates a new HTTP server
@@ -61,6 +65,12 @@ func (s *Server) Handler() http.Handler {
 	return s.mux
 }
 
+// SetTailscaleClient wires up the tsnet LocalClient so that per-request
+// WhoIs lookups can resolve the viewing user's identity.
+func (s *Server) SetTailscaleClient(lc *local.Client) {
+	s.tsLocalClient = lc
+}
+
 // Start starts the HTTP server on the configured local port.
 func (s *Server) Start() error {
 	log.Printf("Server starting on port %s", s.port)
@@ -91,6 +101,9 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Resolve the Tailscale identity of the requesting peer, if available.
+	tailscaleUser := s.resolveViewer(ctx, r)
+
 	// Load ingresses
 	ingresses, err := s.k8sClient.GetVisibleIngresses(ctx)
 	if err != nil {
@@ -101,9 +114,10 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare page data
 	data := PageData{
-		Config:    config,
-		Ingresses: ingresses,
-		DemoMode:  s.k8sClient == nil,
+		Config:        config,
+		Ingresses:     ingresses,
+		DemoMode:      s.k8sClient == nil,
+		TailscaleUser: tailscaleUser,
 	}
 
 	// Render template
@@ -113,6 +127,39 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+}
+
+// resolveViewer returns the Tailscale login name (e.g. "alice@example.com") of
+// the user viewing the page, or an empty string if it cannot be determined.
+//
+// Two paths are supported simultaneously:
+//  1. Tailscale Serve / k8s ingress: Tailscale terminates TLS and proxies to
+//     the local HTTP port, injecting a "Tailscale-User-Login" header. This is
+//     checked first because it is always present on that path and requires no
+//     extra round-trip.
+//  2. tsnet listener: the app holds its own Tailscale node and the request
+//     arrives over a raw net.Listener. No headers are injected, so we fall
+//     back to a WhoIs lookup using the request's remote address.
+//
+// Header spoofing on path 1 is not a concern because Tailscale Serve strips
+// any client-supplied Tailscale-* headers before re-adding them itself, and
+// the server should only be reachable via localhost in that setup.
+func (s *Server) resolveViewer(ctx context.Context, r *http.Request) string {
+	// Path 1: Tailscale Serve injects this header.
+	if login := r.Header.Get("Tailscale-User-Login"); login != "" {
+		return login
+	}
+
+	// Path 2: tsnet — resolve by remote address via the local API.
+	if s.tsLocalClient != nil {
+		if who, err := s.tsLocalClient.WhoIs(ctx, r.RemoteAddr); err == nil {
+			if who.UserProfile != nil {
+				return who.UserProfile.LoginName
+			}
+		}
+	}
+
+	return ""
 }
 
 // handleHealth handles health checks

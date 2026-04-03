@@ -15,10 +15,6 @@ var (
 	// Version information (set via ldflags during build)
 	Version   = "dev"
 	BuildTime = "unknown"
-
-	// tsnet flags
-	addr     = flag.String("addr", ":80", "address to listen on over tailscale")
-	hostname = flag.String("hostname", "gohome", "hostname to use in the tailnet")
 )
 
 func main() {
@@ -60,6 +56,16 @@ func main() {
 		configMapName = "gohome-config"
 	}
 
+	tsnetAddr := os.Getenv("TSNET_ADDR")
+	if tsnetAddr == "" {
+		tsnetAddr = ":80"
+	}
+
+	tsnetHostname := os.Getenv("TSNET_HOSTNAME")
+	if tsnetHostname == "" {
+		tsnetHostname = "gohome"
+	}
+
 	// Initialize Kubernetes client
 	k8sClient, err := internal.NewK8sClient()
 	if err != nil {
@@ -90,17 +96,25 @@ func main() {
 
 	// Create and configure the tsnet server
 	tsnetServer := &tsnet.Server{
-		Hostname:  *hostname,
+		Hostname:  tsnetHostname,
 		Ephemeral: true,
 	}
 	defer tsnetServer.Close()
 
 	// Obtain a tsnet listener before starting goroutines so we can fail fast
 	// if tailscale is unavailable.
-	tsListener, err := tsnetServer.Listen("tcp", *addr)
+	tsListener, err := tsnetServer.Listen("tcp", tsnetAddr)
 	if err != nil {
-		log.Fatalf("Failed to create tsnet listener on %s: %v", *addr, err)
+		log.Fatalf("Failed to create tsnet listener on %s: %v", tsnetAddr, err)
 	}
+
+	// Wire up the tsnet LocalClient so the server can resolve per-request
+	// Tailscale identity via WhoIs.
+	lc, err := tsnetServer.LocalClient()
+	if err != nil {
+		log.Fatalf("Failed to get tsnet local client: %v", err)
+	}
+	server.SetTailscaleClient(lc)
 
 	log.Printf("Starting GoHome %s (built %s)...", Version, BuildTime)
 
@@ -115,7 +129,7 @@ func main() {
 
 	// Serve the same handler over the tailscale (tsnet) listener
 	go func() {
-		log.Printf("Serving over tailscale as %q on %s", *hostname, *addr)
+		log.Printf("Serving over tailscale as %q on %s", tsnetHostname, tsnetAddr)
 		if err := server.ServeListener(tsListener); err != nil {
 			errCh <- fmt.Errorf("tsnet server error: %w", err)
 		}
