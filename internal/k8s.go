@@ -19,6 +19,8 @@ import (
 const (
 	// HideAnnotation is the annotation key to hide ingresses from the homepage
 	HideAnnotation = "gohome.stringer.sh/hide"
+	// NameAnnotation is the annotation key to overwrite the display name of an ingress
+	NameAnnotation = "gohome.stringer.sh/name"
 )
 
 // IngressInfo represents a simplified ingress for display
@@ -152,6 +154,11 @@ func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInf
 	name := ingress.Name
 	if strings.HasSuffix(name, "-ingress") {
 		name = strings.TrimSuffix(name, "-ingress")
+	}
+
+	// Allow the display name to be overridden via annotation
+	if annotationName := ingress.Annotations[NameAnnotation]; annotationName != "" {
+		name = annotationName
 	}
 
 	info := IngressInfo{
