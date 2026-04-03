@@ -7,12 +7,18 @@ import (
 	"os"
 
 	"gohome/internal"
+
+	"tailscale.com/tsnet"
 )
 
 var (
 	// Version information (set via ldflags during build)
 	Version   = "dev"
 	BuildTime = "unknown"
+
+	// tsnet flags
+	addr     = flag.String("addr", ":80", "address to listen on over tailscale")
+	hostname = flag.String("hostname", "gohome", "hostname to use in the tailnet")
 )
 
 func main() {
@@ -42,6 +48,7 @@ func main() {
 		fmt.Println("For more information, visit: https://github.com/joeds13/gohome")
 		os.Exit(0)
 	}
+
 	// Get configuration from environment
 	namespace := os.Getenv("NAMESPACE")
 	if namespace == "" {
@@ -70,14 +77,51 @@ func main() {
 		bookmarkManager = internal.NewBookmarkManager(nil, namespace, configMapName)
 	}
 
-	// Create and start server
+	// Create the server
 	server, err := internal.NewServer(k8sClient, bookmarkManager)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
+	// Log the auth key in redacted form so it's visible in logs without
+	// exposing the full secret. tsnet reads TS_AUTHKEY automatically when
+	// AuthKey is not set on the struct.
+	log.Printf("TS_AUTHKEY: %s", internal.RedactAuthKey(os.Getenv("TS_AUTHKEY")))
+
+	// Create and configure the tsnet server
+	tsnetServer := &tsnet.Server{
+		Hostname:  *hostname,
+		Ephemeral: true,
+	}
+	defer tsnetServer.Close()
+
+	// Obtain a tsnet listener before starting goroutines so we can fail fast
+	// if tailscale is unavailable.
+	tsListener, err := tsnetServer.Listen("tcp", *addr)
+	if err != nil {
+		log.Fatalf("Failed to create tsnet listener on %s: %v", *addr, err)
+	}
+
 	log.Printf("Starting GoHome %s (built %s)...", Version, BuildTime)
-	if err := server.Start(); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+
+	errCh := make(chan error, 2)
+
+	// Serve on the local HTTP port
+	go func() {
+		if err := server.Start(); err != nil {
+			errCh <- fmt.Errorf("local server error: %w", err)
+		}
+	}()
+
+	// Serve the same handler over the tailscale (tsnet) listener
+	go func() {
+		log.Printf("Serving over tailscale as %q on %s", *hostname, *addr)
+		if err := server.ServeListener(tsListener); err != nil {
+			errCh <- fmt.Errorf("tsnet server error: %w", err)
+		}
+	}()
+
+	if err := <-errCh; err != nil {
+		log.Fatalf("Fatal server error: %v", err)
 	}
 }

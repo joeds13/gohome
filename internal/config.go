@@ -156,3 +156,18 @@ func (bm *BookmarkManager) getDefaultBookmarks() []Bookmark {
 		},
 	}
 }
+
+// redactAuthKey returns a redacted but identifiable representation of a
+// Tailscale auth key, showing the first 6 and last 4 characters separated by
+// "...", e.g. "tskey-...abcd". If the key is too short to redact meaningfully
+// it returns a fixed placeholder instead.
+func RedactAuthKey(key string) string {
+	if key == "" {
+		return "(not set)"
+	}
+	const prefixLen, suffixLen = 6, 4
+	if len(key) <= prefixLen+suffixLen {
+		return "(set, too short to redact)"
+	}
+	return key[:prefixLen] + "..." + key[len(key)-suffixLen:]
+}

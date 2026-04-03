@@ -4,6 +4,7 @@ import (
 	"context"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -15,6 +16,7 @@ type Server struct {
 	bookmarkManager *BookmarkManager
 	templates       *template.Template
 	port            string
+	mux             *http.ServeMux
 }
 
 // PageData represents the data passed to templates
@@ -38,22 +40,39 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 		port = "8080"
 	}
 
-	return &Server{
+	s := &Server{
 		k8sClient:       k8sClient,
 		bookmarkManager: bookmarkManager,
 		templates:       templates,
 		port:            port,
-	}, nil
+		mux:             http.NewServeMux(),
+	}
+
+	s.mux.HandleFunc("/", s.handleHome)
+	s.mux.HandleFunc("/health", s.handleHealth)
+	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
+
+	return s, nil
 }
 
-// Start starts the HTTP server
-func (s *Server) Start() error {
-	http.HandleFunc("/", s.handleHome)
-	http.HandleFunc("/health", s.handleHealth)
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
+// Handler returns the HTTP handler for the server, so it can be served
+// over any listener (local TCP, tsnet, etc.).
+func (s *Server) Handler() http.Handler {
+	return s.mux
+}
 
+// Start starts the HTTP server on the configured local port.
+func (s *Server) Start() error {
 	log.Printf("Server starting on port %s", s.port)
-	return http.ListenAndServe(":"+s.port, nil)
+	return http.ListenAndServe(":"+s.port, s.mux)
+}
+
+// ServeListener serves the HTTP handler over an already-established net.Listener.
+// This is used to serve over a tsnet listener.
+func (s *Server) ServeListener(l net.Listener) error {
+	srv := &http.Server{Handler: s.mux}
+	log.Printf("Serving over listener: %s", l.Addr())
+	return srv.Serve(l)
 }
 
 // handleHome handles the main homepage
