@@ -5,4 +5,4 @@ type = "1password"
 vault = "Homelab"
 
 [secrets]
-TS_AUTHKEY = { provider = "1password", value = "gohome" }
+TS_AUTHKEY = { provider = "1password", value = "gohome-secret" }
