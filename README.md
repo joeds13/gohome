@@ -4,8 +4,9 @@ A modern, clean personal homepage for your home cluster that displays Kubernetes
 
 ## Features
 
+- 🚀 **Apps Section**: Pin frequently-used ingresses to a prominent row above Services using an annotation
 - 🔗 **Automatic Service Discovery**: Lists all Kubernetes ingresses in alphabetical order
-- 🏷️ **Hide Services**: Use annotations to hide specific ingresses from the homepage
+- 🏷️ **Flexible Annotations**: Hide ingresses, override display names, or promote them to Apps
 - 📚 **Custom Bookmarks**: Configure additional bookmarks via ConfigMaps
 - 🎨 **Modern Design**: Clean, techy aesthetic with monospaced fonts
 - ⚡ **Lightweight**: Minimal resource usage, perfect for home clusters
@@ -17,7 +18,8 @@ A modern, clean personal homepage for your home cluster that displays Kubernetes
 The homepage features:
 
 - A clean header with cluster status indicator
-- Services section showing all visible ingresses
+- **Apps section** (green accent) — pinned, frequently-used services shown prominently at the top
+- **Services section** (cyan/purple accent) — all other visible ingresses listed alphabetically
 - Bookmarks section organized by categories
 - Real-time timestamp in the footer
 
@@ -186,9 +188,48 @@ kubectl edit configmap gohome-config -n gohome
 - `NAMESPACE`: Kubernetes namespace to watch (default: default)
 - `CONFIG_MAP_NAME`: ConfigMap name for bookmarks (default: gohome-config)
 
-### Hiding Ingresses
+### Ingress Annotations
 
-Add the annotation `gohome.stringer.sh/hide: "true"` to any ingress you want to hide:
+GoHome supports three annotations on `Ingress` resources:
+
+| Annotation | Value | Effect |
+|---|---|---|
+| `gohome.stringer.sh/app` | `"true"` | Promotes the ingress to the **Apps** section (shown above Services) |
+| `gohome.stringer.sh/hide` | `"true"` | Hides the ingress from the homepage entirely |
+| `gohome.stringer.sh/name` | any string | Overrides the display name shown on the card |
+
+#### Promoting an ingress to the Apps section
+
+Add `gohome.stringer.sh/app: "true"` to any ingress you click frequently (e.g. FreshRSS, Home Assistant). It will appear in the green-accented **Apps** row at the top of the page and will **not** be duplicated in the Services section below.
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: freshrss
+  annotations:
+    gohome.stringer.sh/app: "true"  # Promotes to the Apps section
+spec:
+  tls:
+    - hosts:
+        - rss.example.com
+      secretName: freshrss-tls
+  rules:
+    - host: rss.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: freshrss
+                port:
+                  number: 80
+```
+
+#### Hiding an ingress
+
+Add `gohome.stringer.sh/hide: "true"` to any ingress you want to hide from the homepage entirely:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -196,7 +237,38 @@ kind: Ingress
 metadata:
   name: private-service
   annotations:
-    gohome.stringer.sh/hide: "true"  # This will hide the ingress
+    gohome.stringer.sh/hide: "true"  # Hidden from the homepage
+spec:
+  # ... rest of ingress spec
+```
+
+#### Overriding the display name
+
+By default GoHome uses the ingress `name` (stripping a trailing `-ingress` suffix). Override it with:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app-ingress
+  annotations:
+    gohome.stringer.sh/name: "My App"  # Displayed as "My App" instead of "my-app"
+spec:
+  # ... rest of ingress spec
+```
+
+#### Combining annotations
+
+Annotations can be combined freely. For example, promote an ingress to Apps *and* give it a friendly display name:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: freshrss-ingress
+  annotations:
+    gohome.stringer.sh/app: "true"
+    gohome.stringer.sh/name: "FreshRSS"
 spec:
   # ... rest of ingress spec
 ```
@@ -218,22 +290,37 @@ data:
   bookmark-nextcloud: "https://cloud.example.com|Applications"
 ```
 
+## Metrics
+
+GoHome exposes Prometheus metrics at `/metrics`. The following application-specific metrics are available:
+
+| Metric | Type | Description |
+|---|---|---|
+| `gohome_apps_displayed` | Gauge | Number of Apps currently shown in the Apps section |
+| `gohome_services_displayed` | Gauge | Number of ingresses currently shown in the Services section |
+| `gohome_unique_visitors` | Gauge (labelled `email`) | Unique Tailscale users who have loaded the homepage |
+| `gohome_http_requests_total` | Counter | Total HTTP requests by `code` and `method` |
+| `gohome_http_requests_in_flight` | Gauge | Current number of in-flight HTTP requests |
+| `gohome_http_request_duration_seconds` | Histogram | Request duration by `code` and `method` |
+
+A pre-built Grafana dashboard is included in `k8s/monitoring/grafana-dashboard.yaml`.
+
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Web Browser   │────│   Kubernetes    │────│   ConfigMap     │
-│                 │    │   Ingress       │    │   (Bookmarks)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-        │                       │
-        │                       │
-        ▼                       ▼
+┌─────────────────┐    ┌─────────────────────────────────────────┐    ┌─────────────────┐
+│   Web Browser   │────│         Kubernetes Ingresses            │────│   ConfigMap     │
+│                 │    │  app=true → Apps  |  rest → Services    │    │   (Bookmarks)   │
+└─────────────────┘    └─────────────────────────────────────────┘    └─────────────────┘
+        │                                  │
+        │                                  │
+        ▼                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        GoHome App                               │
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
 │  │ K8s Client  │  │   Server    │  │   Template Engine       │ │
-│  │             │  │             │  │                         │ │
+│  │  (k8s.go)   │  │ (server.go) │  │    (index.html)         │ │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```

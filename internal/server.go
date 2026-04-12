@@ -25,7 +25,8 @@ type Server struct {
 	mux                  *http.ServeMux
 	handler              http.Handler // instrumented handler, built once, shared by all listeners
 	tsLocalClient        *local.Client
-	ingressesDisplayed   prometheus.Gauge
+	appsDisplayed        prometheus.Gauge
+	servicesDisplayed    prometheus.Gauge
 	uniqueVisitors       *prometheus.GaugeVec
 	seenVisitors         map[string]struct{}
 	seenVisitorsMu       sync.Mutex
@@ -37,7 +38,8 @@ type Server struct {
 // PageData represents the data passed to templates
 type PageData struct {
 	Config        *Config
-	Ingresses     []IngressInfo
+	Apps          []IngressInfo
+	Services      []IngressInfo
 	Error         string
 	DemoMode      bool
 	TailscaleUser string // email of the viewing tailnet peer, empty for local requests
@@ -75,11 +77,17 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 	}, []string{"code", "method"})
 	prometheus.MustRegister(httpRequestDuration)
 
-	ingressesDisplayed := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "gohome_ingresses_displayed",
-		Help: "Number of ingresses currently displayed on the homepage.",
+	appsDisplayed := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "gohome_apps_displayed",
+		Help: "Number of apps currently displayed on the homepage.",
 	})
-	prometheus.MustRegister(ingressesDisplayed)
+	prometheus.MustRegister(appsDisplayed)
+
+	servicesDisplayed := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "gohome_services_displayed",
+		Help: "Number of services currently displayed on the homepage.",
+	})
+	prometheus.MustRegister(servicesDisplayed)
 
 	uniqueVisitors := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "gohome_unique_visitors",
@@ -95,7 +103,8 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 		templates:            templates,
 		port:                 port,
 		mux:                  mux,
-		ingressesDisplayed:   ingressesDisplayed,
+		appsDisplayed:        appsDisplayed,
+		servicesDisplayed:    servicesDisplayed,
 		uniqueVisitors:       uniqueVisitors,
 		seenVisitors:         make(map[string]struct{}),
 		httpRequestsInFlight: httpRequestsInFlight,
@@ -183,20 +192,23 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load ingresses
-	ingresses, err := s.k8sClient.GetVisibleIngresses(ctx)
+	apps, services, err := s.k8sClient.GetVisibleIngresses(ctx)
 	if err != nil {
 		log.Printf("Warning: Error loading ingresses: %v", err)
-		// Continue with empty ingresses list instead of failing
-		ingresses = []IngressInfo{}
+		// Continue with empty slices instead of failing
+		apps = []IngressInfo{}
+		services = []IngressInfo{}
 	}
 
-	// Update the ingresses-displayed gauge.
-	s.ingressesDisplayed.Set(float64(len(ingresses)))
+	// Update the displayed gauges.
+	s.appsDisplayed.Set(float64(len(apps)))
+	s.servicesDisplayed.Set(float64(len(services)))
 
 	// Prepare page data
 	data := PageData{
 		Config:        config,
-		Ingresses:     ingresses,
+		Apps:          apps,
+		Services:      services,
 		DemoMode:      s.k8sClient == nil,
 		TailscaleUser: tailscaleUser,
 	}
@@ -257,8 +269,9 @@ func (s *Server) renderError(w http.ResponseWriter, message string) {
 			Title:     "Go Home",
 			Bookmarks: []Bookmark{},
 		},
-		Ingresses: []IngressInfo{},
-		DemoMode:  s.k8sClient == nil,
+		Apps:     []IngressInfo{},
+		Services: []IngressInfo{},
+		DemoMode: s.k8sClient == nil,
 	}
 
 	err := s.templates.ExecuteTemplate(w, "index.html", data)

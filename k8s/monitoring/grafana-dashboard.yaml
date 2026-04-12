@@ -563,12 +563,53 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "${datasource}" },
-              "expr": "gohome_ingresses_displayed{job=\"gohome\"}",
-              "legendFormat": "Ingresses",
+              "expr": "gohome_apps_displayed{job=\"gohome\"}",
+              "legendFormat": "Apps",
               "refId": "A"
             }
           ],
-          "title": "Ingresses Displayed",
+          "title": "Apps Displayed",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "fixedColor": "green", "mode": "fixed" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 27 },
+          "id": 23,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${datasource}" },
+              "expr": "gohome_services_displayed{job=\"gohome\"}",
+              "legendFormat": "Services",
+              "refId": "A"
+            }
+          ],
+          "title": "Services Displayed",
           "type": "stat"
         },
         {
@@ -587,7 +628,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 27 },
+          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 27 },
           "id": 22,
           "options": {
             "colorMode": "background",

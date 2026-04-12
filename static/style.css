@@ -234,10 +234,6 @@ body {
 }
 
 /* Service cards */
-.service-card {
-    /* Additional service-specific styles if needed */
-}
-
 .service-name {
     display: inline;
     font-size: 1rem;
@@ -251,6 +247,30 @@ body {
     color: var(--accent-primary);
     font-weight: 400;
     word-break: break-all;
+}
+
+/* App cards — prominent, warm accent for frequently-used links */
+.app-card::before {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.app-card:hover {
+    border-color: #10b981;
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+}
+
+.app-card .service-url {
+    color: #10b981;
+}
+
+/* Tailscale app card variant */
+.app-card--tailscale::before {
+    background: linear-gradient(90deg, #2563eb, #10b981);
+}
+
+.app-card--tailscale:hover {
+    border-color: #10b981;
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
 }
 
 /* Tailscale service card variant */
@@ -281,10 +301,6 @@ body {
 }
 
 /* Bookmark cards */
-.bookmark-card {
-    /* Additional bookmark-specific styles if needed */
-}
-
 .bookmark-name {
     font-size: 1rem;
     font-weight: 500;

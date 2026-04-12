@@ -21,6 +21,8 @@ const (
 	HideAnnotation = "gohome.stringer.sh/hide"
 	// NameAnnotation is the annotation key to overwrite the display name of an ingress
 	NameAnnotation = "gohome.stringer.sh/name"
+	// AppAnnotation is the annotation key to mark an ingress as a top-level app
+	AppAnnotation = "gohome.stringer.sh/app"
 )
 
 // IngressInfo represents a simplified ingress for display
@@ -31,6 +33,7 @@ type IngressInfo struct {
 	URL             string
 	Tailscale       bool
 	TailscaleFunnel bool
+	IsApp           bool
 }
 
 // K8sClient wraps the Kubernetes client
@@ -100,19 +103,20 @@ func (k *K8sClient) GetClientset() *kubernetes.Clientset {
 	return k.clientset
 }
 
-// GetVisibleIngresses returns all ingresses that should be displayed on the homepage
-func (k *K8sClient) GetVisibleIngresses(ctx context.Context) ([]IngressInfo, error) {
+// GetVisibleIngresses returns all ingresses that should be displayed on the homepage,
+// split into apps (annotated with gohome.stringer.sh/app: "true") and regular services.
+func (k *K8sClient) GetVisibleIngresses(ctx context.Context) (apps []IngressInfo, services []IngressInfo, err error) {
 	if k == nil || k.clientset == nil {
 		log.Printf("Info: Kubernetes client not available, returning demo ingresses")
-		return k.getDemoIngresses(), nil
+		demoApps, demoServices := k.getDemoIngresses()
+		return demoApps, demoServices, nil
 	}
 
 	ingresses, err := k.clientset.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list ingresses: %w", err)
+		return nil, nil, fmt.Errorf("failed to list ingresses: %w", err)
 	}
 
-	var visibleIngresses []IngressInfo
 	for _, ingress := range ingresses.Items {
 		// Skip ingresses with hide annotation
 		if shouldHide := ingress.Annotations[HideAnnotation]; shouldHide == "true" {
@@ -122,17 +126,26 @@ func (k *K8sClient) GetVisibleIngresses(ctx context.Context) ([]IngressInfo, err
 
 		// Extract ingress information
 		info := k.extractIngressInfo(&ingress)
-		if info.URL != "" {
-			visibleIngresses = append(visibleIngresses, info)
+		if info.URL == "" {
+			continue
+		}
+
+		if info.IsApp {
+			apps = append(apps, info)
+		} else {
+			services = append(services, info)
 		}
 	}
 
-	// Sort alphabetically by name
-	sort.Slice(visibleIngresses, func(i, j int) bool {
-		return visibleIngresses[i].Name < visibleIngresses[j].Name
+	// Sort both slices alphabetically by name
+	sort.Slice(apps, func(i, j int) bool {
+		return apps[i].Name < apps[j].Name
+	})
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].Name < services[j].Name
 	})
 
-	return visibleIngresses, nil
+	return apps, services, nil
 }
 
 // isTailscaleIngress returns true when the ingress is managed by the Tailscale operator.
@@ -152,9 +165,7 @@ func isTailscaleIngress(ingress *networkingv1.Ingress) bool {
 // extractIngressInfo converts a Kubernetes ingress to our simplified structure
 func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInfo {
 	name := ingress.Name
-	if strings.HasSuffix(name, "-ingress") {
-		name = strings.TrimSuffix(name, "-ingress")
-	}
+	name = strings.TrimSuffix(name, "-ingress")
 
 	// Allow the display name to be overridden via annotation
 	if annotationName := ingress.Annotations[NameAnnotation]; annotationName != "" {
@@ -165,6 +176,7 @@ func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInf
 		Name:            name,
 		Tailscale:       isTailscaleIngress(ingress),
 		TailscaleFunnel: isTailscaleIngress(ingress) && ingress.Annotations["tailscale.com/funnel"] == "true",
+		IsApp:           ingress.Annotations[AppAnnotation] == "true",
 	}
 
 	// Extract the first path from spec rules if available
@@ -213,20 +225,30 @@ func (k *K8sClient) extractIngressInfo(ingress *networkingv1.Ingress) IngressInf
 	return info
 }
 
-// getDemoIngresses returns example ingresses for demo mode
-func (k *K8sClient) getDemoIngresses() []IngressInfo {
-	return []IngressInfo{
+// getDemoIngresses returns example ingresses for demo mode, split into apps and services.
+func (k *K8sClient) getDemoIngresses() ([]IngressInfo, []IngressInfo) {
+	apps := []IngressInfo{
+		{
+			Name:  "freshrss",
+			Host:  "rss.example.com",
+			Path:  "/",
+			URL:   "https://rss.example.com/",
+			IsApp: true,
+		},
+		{
+			Name:  "home-assistant",
+			Host:  "hass.example.com",
+			Path:  "/",
+			URL:   "https://hass.example.com/",
+			IsApp: true,
+		},
+	}
+	services := []IngressInfo{
 		{
 			Name: "grafana",
 			Host: "grafana.example.com",
 			Path: "/",
 			URL:  "https://grafana.example.com/",
-		},
-		{
-			Name: "home-assistant",
-			Host: "hass.example.com",
-			Path: "/",
-			URL:  "https://hass.example.com/",
 		},
 		{
 			Name: "jellyfin",
@@ -262,4 +284,5 @@ func (k *K8sClient) getDemoIngresses() []IngressInfo {
 			URL:  "https://portainer.example.com/",
 		},
 	}
+	return apps, services
 }
