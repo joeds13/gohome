@@ -58,7 +58,7 @@ func main() {
 
 	tsnetAddr := os.Getenv("TSNET_ADDR")
 	if tsnetAddr == "" {
-		tsnetAddr = ":80"
+		tsnetAddr = ":443"
 	}
 
 	tsnetHostname := os.Getenv("TSNET_HOSTNAME")
@@ -113,11 +113,13 @@ func main() {
 	}
 	defer tsnetServer.Close()
 
-	// Obtain a tsnet listener before starting goroutines so we can fail fast
-	// if tailscale is unavailable.
-	tsListener, err := tsnetServer.Listen("tcp", tsnetAddr)
+	// Obtain a TLS listener before starting goroutines so we can fail fast
+	// if tailscale is unavailable. ListenTLS automatically fetches and renews
+	// a Let's Encrypt certificate for the node's *.ts.net domain via
+	// Tailscale's control plane — no cert management required.
+	tsListener, err := tsnetServer.ListenTLS("tcp", tsnetAddr)
 	if err != nil {
-		log.Fatalf("Failed to create tsnet listener on %s: %v", tsnetAddr, err)
+		log.Fatalf("Failed to create tsnet TLS listener on %s: %v", tsnetAddr, err)
 	}
 
 	// Wire up the tsnet LocalClient so the server can resolve per-request
@@ -141,7 +143,7 @@ func main() {
 
 	// Serve the same handler over the tailscale (tsnet) listener
 	go func() {
-		log.Printf("Serving over tailscale as %q on %s", tsnetHostname, tsnetAddr)
+		log.Printf("Serving over tailscale as %q on https://...ts.net%s", tsnetHostname, tsnetAddr)
 		if err := server.ServeListener(tsListener); err != nil {
 			errCh <- fmt.Errorf("tsnet server error: %w", err)
 		}

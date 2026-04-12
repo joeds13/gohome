@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
@@ -133,6 +134,12 @@ func (bm *BookmarkManager) GetConfig(ctx context.Context) (*Config, error) {
 		}
 	} else {
 		log.Printf("Info: Using default title (demo mode)")
+	}
+
+	// PAGE_TITLE env var takes highest priority, allowing local overrides
+	// (e.g. via mise.toml) without touching the ConfigMap.
+	if t := os.Getenv("PAGE_TITLE"); t != "" {
+		title = t
 	}
 
 	return &Config{

@@ -10,6 +10,7 @@ watchexec = "latest"
 [env]
 _.fnox-env = { tools = true }
 TSNET_HOSTNAME = "gohome-dev"
+PAGE_TITLE = "Go Home - Dev"
 
 [tasks.build]
 description = "Build the Go binary"
