@@ -11,28 +11,29 @@ metadata:
 # The monitoring/ component adds the ServiceMonitor and Grafana dashboard for Prometheus Operator.
 # It is included here unconditionally; remove it if your cluster does not have the Prometheus Operator CRDs.
 resources:
-- rbac.yaml
-- configmap.yaml
-- deployment.yaml
-- ingress.yaml
-- service.yaml
+  - rbac.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - service.yaml
+  - tsnet-pvc.yaml
 
 # Don't include monitoing by default
 # components:
 #   - monitoring/
 
 images:
-- name: ghcr.io/joeds13/gohome
-  newTag: "2026.16"
+  - name: ghcr.io/joeds13/gohome
+    newTag: "2026.16"
 
 replicas:
-- count: 1
-  name: gohome
+  - count: 1
+    name: gohome
 
 labels:
-- includeSelectors: true
-  pairs:
-    app: gohome
-    app.kubernetes.io/component: web
-    app.kubernetes.io/name: gohome
-    app.kubernetes.io/part-of: gohome
+  - includeSelectors: true
+    pairs:
+      app: gohome
+      app.kubernetes.io/component: web
+      app.kubernetes.io/name: gohome
+      app.kubernetes.io/part-of: gohome

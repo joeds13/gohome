@@ -66,6 +66,14 @@ func main() {
 		tsnetHostname = "gohome"
 	}
 
+	// TS_STATE_DIR is the directory where tsnet persists its node identity
+	// (private key, node ID, etc.). Mounting a persistent volume at this path
+	// and setting TS_STATE_DIR ensures the node keeps the same Tailscale
+	// identity across restarts, so the hostname never gets a numeric suffix
+	// like "gohome-1". If unset, tsnet uses a temp dir and the node is
+	// effectively stateless — Tailscale will append a number each redeploy.
+	tsnetStateDir := os.Getenv("TS_STATE_DIR")
+
 	// Initialize Kubernetes client
 	k8sClient, err := internal.NewK8sClient()
 	if err != nil {
@@ -94,10 +102,14 @@ func main() {
 	// AuthKey is not set on the struct.
 	log.Printf("TS_AUTHKEY: %s", internal.RedactAuthKey(os.Getenv("TS_AUTHKEY")))
 
-	// Create and configure the tsnet server
+	// Create and configure the tsnet server.
+	// Dir must point at a persistent volume so the node retains its identity
+	// (private key + node ID) across restarts. Without this, every restart
+	// looks like a brand-new node to Tailscale and it appends a numeric
+	// suffix (e.g. "gohome-1") to avoid collisions with the previous ghost.
 	tsnetServer := &tsnet.Server{
-		Hostname:  tsnetHostname,
-		Ephemeral: true,
+		Hostname: tsnetHostname,
+		Dir:      tsnetStateDir,
 	}
 	defer tsnetServer.Close()
 

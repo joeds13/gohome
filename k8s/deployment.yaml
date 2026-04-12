@@ -31,6 +31,11 @@ spec:
                   fieldPath: metadata.namespace
             - name: CONFIG_MAP_NAME
               value: "gohome-config"
+            - name: TS_STATE_DIR
+              value: /var/lib/tsnet
+          volumeMounts:
+            - name: tsnet-state
+              mountPath: /var/lib/tsnet
           resources:
             requests:
               cpu: 50m
@@ -63,3 +68,7 @@ spec:
             readOnlyRootFilesystem: false
       securityContext:
         fsGroup: 1001
+      volumes:
+        - name: tsnet-state
+          persistentVolumeClaim:
+            claimName: gohome-tsnet-state
