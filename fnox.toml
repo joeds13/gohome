@@ -1,8 +1,13 @@
-default_provider = "1password"
+default_provider = "1password-homelab"
 
-[providers.1password]
+[providers.1password-homelab]
 type = "1password"
 vault = "Homelab"
 
+[providers.1password-private]
+type = "1password"
+vault = "Private"
+
 [secrets]
-TS_AUTHKEY = { provider = "1password", value = "gohome-secret" }
+GITHUB_TOKEN = { provider = "1password-private", value = "Github/personal_token" }
+TS_AUTHKEY = { provider = "1password-homelab", value = "gohome-secret" }
