@@ -13,7 +13,7 @@ import (
 
 var (
 	// Version information (set via ldflags during build)
-	Version   = "2026.19"
+	Version   = "dev"
 	BuildTime = "unknown"
 )
 

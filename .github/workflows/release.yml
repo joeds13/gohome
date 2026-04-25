@@ -87,7 +87,7 @@ jobs:
           files: dist/*
 
       - name: Update GitOps
-        uses: joeds13/annover@7e1c180c2fa23c1cd5fe608ffd92ee3f2172ac41 # 2026.9
+        uses: joeds13/annover@b5fd337029c618fc6565fa73dc5f2f6eb2aeb982 # 2026.10
         with:
           repository: joeds13/turingpi_talos_cluster
           token: ${{ secrets.GITOPS_TOKEN }}
