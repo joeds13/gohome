@@ -24,7 +24,7 @@ resources:
 
 images:
 - name: ghcr.io/joeds13/gohome
-  newTag: "2026.19"
+  newTag: "2026.20"
 
 replicas:
 - count: 1
