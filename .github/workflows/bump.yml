@@ -16,6 +16,6 @@ jobs:
           fetch-depth: 0
 
       - name: Bump version
-        uses: joeds13/annover@10253f692c4c02f555e91b95f63613aa070459da # 2026.8
+        uses: joeds13/annover@7e1c180c2fa23c1cd5fe608ffd92ee3f2172ac41 # 2026.9
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
