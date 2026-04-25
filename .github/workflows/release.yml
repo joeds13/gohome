@@ -10,12 +10,11 @@ env:
   IMAGE_NAME: joeds13/gohome
 
 jobs:
-  build-and-release:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
-      security-events: write
 
     steps:
       - name: Checkout repository
@@ -24,59 +23,35 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: "1.26"
           cache: true
 
-      - name: Get release version
-        id: version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building release ${VERSION}"
-
-      - name: Run tests and quality checks
+      - name: Run tests
         run: |
           go mod download
           go test -v ./...
           go vet ./...
-          go fmt ./...
 
-      - name: Build binaries for multiple platforms
+      - name: Build binaries
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
           mkdir -p dist
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          # Build for different platforms
-          PLATFORMS=(
-            "linux/amd64"
-            "linux/arm64"
-            "linux/arm"
-            "darwin/amd64"
-            "darwin/arm64"
-            "windows/amd64"
-          )
-
-          for platform in "${PLATFORMS[@]}"; do
-            GOOS=${platform%/*}
-            GOARCH=${platform#*/}
-            output_name="gohome-${GOOS}-${GOARCH}"
-            if [ "$GOOS" = "windows" ]; then
-              output_name+=".exe"
-            fi
-
-            echo "Building for $GOOS/$GOARCH..."
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
-              -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              -o "dist/${output_name}" \
-              ./cmd/main.go
+          for platform in linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64 windows/amd64; do
+            GOOS="${platform%/*}"
+            GOARCH="${platform#*/}"
+            output="dist/gohome-${GOOS}-${GOARCH}"
+            [ "$GOOS" = "windows" ] && output+=".exe"
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+              -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+              -o "$output" ./cmd/main.go
           done
 
-      - name: Create checksums
-        run: |
-          cd dist
-          sha256sum * > checksums.txt
-          cat checksums.txt
+          cd dist && sha256sum * > checksums.txt
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
@@ -85,117 +60,37 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
       - name: Log in to Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-          labels: |
-            org.opencontainers.image.title=GoHome
-            org.opencontainers.image.description=Kubernetes personal homepage for home clusters
-            org.opencontainers.image.vendor=${{ github.repository_owner }}
-            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
-            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
-
-      - name: Build and push multi-arch Docker image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+      - name: Build and push Docker image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ github.event.repository.pushed_at }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            VERSION=${{ steps.version.outputs.VERSION }}
-            BUILD_TIME=${{ github.event.repository.pushed_at }}
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-        with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-
-      - name: Create Kubernetes manifests archive
-        run: |
-          # Create release-specific manifests
-          mkdir -p release-manifests
-          cp -r k8s/* release-manifests/
-
-          # Update image tags in manifests
-          sed -i "s|image: gohome:latest|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}|g" release-manifests/deployment.yaml
-
-          # Create archive
-          tar -czf kubernetes-manifests-${{ steps.version.outputs.VERSION }}.tar.gz release-manifests/
-
-      - name: Create release notes
-        id: release_notes
-        run: |
-          cat > release_notes.md << EOF
-          ## 🚀 GoHome ${{ steps.version.outputs.VERSION }}
-
-          ### 📦 Container Images
-
-          Multi-architecture container images are available:
-
-          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}\`
-          - \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`
-
-          **Supported architectures:**
-          - linux/amd64
-          - linux/arm64
-          - linux/arm/v7
-
-          ### 📋 Installation
-
-          **Install:**
-          \`\`\`bash
-          kubectl apply -k https://github.com/joeds13/gohome/k8s?ref=${{ steps.version.outputs.VERSION }}
-          \`\`\`
-
-          ### 🔒 Security
-
-          - Container vulnerability scan results available in Security tab
-          - SBOM (Software Bill of Materials) included with release
-          - All binaries signed and checksummed
-
-          ### 📁 Assets
-
-          - Pre-compiled binaries for multiple platforms
-          - Kubernetes manifests
-          - Checksums and SBOM
-
-          ### 🏠 What's GoHome?
-
-          GoHome is a modern, clean personal homepage for Kubernetes home clusters that:
-
-          - 🔗 Automatically discovers and displays your Kubernetes ingresses
-          - 📚 Supports custom bookmarks via ConfigMaps
-          - 🎨 Features a beautiful dark theme with monospaced fonts
-          - 🔒 Runs securely with minimal RBAC permissions
-          - 📱 Works perfectly on desktop and mobile devices
-
-          Perfect for homelab enthusiasts who want a clean, functional dashboard for their self-hosted services!
-          EOF
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          files: |
-            dist/*
-            kubernetes-manifests-${{ steps.version.outputs.VERSION }}.tar.gz
-            sbom.spdx.json
-          body_path: release_notes.md
-          generate_release_notes: true
-          make_latest: true
+          files: dist/*
+
+      - name: Update GitOps
+        uses: joeds13/annover@10253f692c4c02f555e91b95f63613aa070459da # 2026.8
+        with:
+          repository: joeds13/turingpi_talos_cluster
+          token: ${{ secrets.GITOPS_TOKEN }}
+          image: ghcr.io/joeds13/gohome
+          tag: ${{ github.ref_name }}
+          file: gohome/kustomization.yaml
