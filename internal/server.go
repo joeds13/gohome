@@ -46,7 +46,7 @@ type PageData struct {
 }
 
 // NewServer creates a new HTTP server
-func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server, error) {
+func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager, Version string) (*Server, error) {
 	// Parse templates
 	templates, err := template.ParseGlob("templates/*.html")
 	if err != nil {
@@ -114,8 +114,11 @@ func NewServer(k8sClient *K8sClient, bookmarkManager *BookmarkManager) (*Server,
 
 	s.mux.HandleFunc("/", s.handleHome)
 	s.mux.HandleFunc("/health", s.handleHealth)
-	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
 	s.mux.Handle("/metrics", promhttp.Handler())
+	s.mux.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		s.handleVersion(w, r, Version)
+	})
+	s.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
 
 	// Build the instrumented handler once so that both the local TCP listener
 	// and the tsnet listener share a single middleware chain and a single
@@ -259,6 +262,12 @@ func (s *Server) resolveViewer(ctx context.Context, r *http.Request) string {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+}
+
+// handleVersion handles returning version
+func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request, Version string) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(Version))
 }
 
 // renderError renders an error page

@@ -92,7 +92,7 @@ func main() {
 	}
 
 	// Create the server
-	server, err := internal.NewServer(k8sClient, bookmarkManager)
+	server, err := internal.NewServer(k8sClient, bookmarkManager, Version)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}

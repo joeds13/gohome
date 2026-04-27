@@ -17,7 +17,7 @@ PAGE_TITLE = "Go Home - Dev"
 [tasks.build]
 description = "Build the Go binary"
 run = """
-echo "Building {{app_name}}..."
+echo "Building gohome..."
 CGO_ENABLED=0 GOOS=${GOOS:-linux} GOARCH=${GOARCH:-amd64} go build \
     -ldflags="-s -w -X main.Version=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev') -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o bin/gohome ./cmd/main.go
