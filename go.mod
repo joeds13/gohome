@@ -3,9 +3,10 @@ module gohome
 go 1.26.1
 
 require (
+	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/text v0.35.0
 	k8s.io/api v0.35.3
-	k8s.io/apimachinery v0.35.3
+	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.35.3
 	tailscale.com v1.96.5
 )
@@ -71,7 +72,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pires/go-proxyproto v0.8.1 // indirect
 	github.com/prometheus-community/pro-bing v0.4.0 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
@@ -98,7 +98,7 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gvisor.dev/gvisor v0.0.0-20260224225140-573d5e7127a8 // indirect
